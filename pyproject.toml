@@ -1,0 +1,13 @@
+[project]
+name = "ctbto"
+version = "0.1.0"
+dependencies = [
+    "pycryptodome",
+    "matplotlib",
+    "numpy",
+    "tqdm",
+    "SciencePlots"
+]
+
+[project.scripts]
+ctbto-benchmark = "ctbto.cli.main:main"
