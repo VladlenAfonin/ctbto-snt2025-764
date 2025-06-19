@@ -89,8 +89,9 @@ def bytes_to_megabytes(xs: numpy.ndarray) -> numpy.ndarray:
 
 
 def main() -> int:
-    xs = numpy.linspace(start=1.0, stop=10.0, num=20)
+    xs = numpy.linspace(start=0.1, stop=10.0, num=30)
     xs = megabytes_to_bytes(xs)
+    print(xs)
     n_iter = 10
 
     logger.info("begin benchmarking hmac-sha256")
@@ -116,7 +117,6 @@ def main() -> int:
     plt.style.use(["science"])
     _, ax = plt.subplots()
 
-    ax.set_title("")
     ax.set_xlabel("Input size, MB")
     ax.set_ylabel("Generation time, ms")
     ax.plot(xs, ys_hmac, label=r"$\textsf{HMAC-SHA256}$")
