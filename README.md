@@ -11,6 +11,7 @@ This repository is not in any way affiliated with the CTBTO.
 <!-- mtoc start -->
 
 - [Benchmark Description](#benchmark-description)
+- [Sample Results](#sample-results)
 - [Installation](#installation)
     - [Windows](#windows)
     - [Linux/macOS](#linuxmacos)
@@ -23,6 +24,16 @@ This repository is not in any way affiliated with the CTBTO.
 ## Benchmark Description
 
 We consider ECDSA and HMAC both instantiated with the SHA256 hash function.
+
+## Sample Results
+
+![Sample Benchmark Results Figure](./results/figure.png)
+
+The above results were calculated on the computer with the following parameters:
+
+- CPU: AMD Ryzen 5 5600G with Radeon Graphics 3.90 GHz
+- RAM: 32 GB
+- OS: Windows 10 22H2
 
 ## Installation
 
