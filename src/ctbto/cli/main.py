@@ -1,9 +1,9 @@
 import argparse
-from dataclasses import dataclass
 import logging
 import logging.config
 import os
 import sys
+from dataclasses import dataclass
 from time import time_ns
 from types import ModuleType
 
@@ -14,6 +14,7 @@ from Crypto.Hash import SHA256, HMAC
 from Crypto.Signature import DSS
 from Crypto.PublicKey import ECC
 
+# INFO: Required for figure styles. Do not delete.
 import scienceplots
 
 
@@ -39,7 +40,7 @@ logging.config.dictConfig(logging_config)
 logger = logging.getLogger(__name__)
 
 
-def run_ecdsa(
+def run_ecdsa_generate(
     input_size: int,
     hash_function: ModuleType = SHA256,
     n_iter: int = 100,
@@ -61,7 +62,55 @@ def run_ecdsa(
     return numpy.mean(times)
 
 
-def run_hmac(
+def run_ecdsa_verify(
+    input_size: int,
+    hash_function: ModuleType = SHA256,
+    n_iter: int = 100,
+):
+    times = []
+    for _ in tqdm(range(n_iter), leave=False):
+        secret = ECC.generate(curve="p256")
+        actor = DSS.new(secret, "fips-186-3")
+        input = numpy.random.bytes(input_size)
+        input_digest = hash_function.new(input)
+        signature = actor.sign(input_digest)
+
+        begin = time_ns()
+
+        input_digest = hash_function.new(input)
+        _ = actor.verify(input_digest, signature)
+
+        end = time_ns()
+        times.append(end - begin)
+
+    return numpy.mean(times)
+
+
+def run_hmac_verify(
+    input_size: int,
+    secret_size: int = 32,
+    hash_function: ModuleType = SHA256,
+    n_iter: int = 100,
+) -> numpy.float32:
+    times = []
+    for _ in tqdm(range(n_iter), leave=False):
+        secret = numpy.random.bytes(secret_size)
+        input = numpy.random.bytes(input_size)
+        hmac = HMAC.new(secret, input, digestmod=hash_function)
+        mac = hmac.digest()
+
+        begin = time_ns()
+
+        hmac = HMAC.new(secret, input, digestmod=hash_function)
+        hmac.verify(mac)
+
+        end = time_ns()
+        times.append(end - begin)
+
+    return numpy.mean(times)
+
+
+def run_hmac_generate(
     input_size: int,
     secret_size: int = 32,
     hash_function: ModuleType = SHA256,
@@ -155,22 +204,31 @@ def parse_args() -> argparse.Namespace:
 @dataclass(slots=True)
 class BenchmarkResults:
     xs: numpy.ndarray
-    ys_hmac: numpy.ndarray
-    ys_ecdsa: numpy.ndarray
+    ys_hmac_generate: numpy.ndarray
+    ys_ecdsa_generate: numpy.ndarray
+    ys_hmac_verify: numpy.ndarray
+    ys_ecdsa_verify: numpy.ndarray
 
 
 @dataclass(slots=True, init=False)
 class BenchmarkResultsPaths:
     root_dir: str
+
     xs_path: str
-    ys_hmac_path: str
-    ys_ecdsa_path: str
+
+    ys_hmac_generate_path: str
+    ys_hmac_verify_path: str
+
+    ys_ecdsa_generate_path: str
+    ys_ecdsa_verify_path: str
 
     def __init__(self, dir) -> None:
         self.root_dir = dir
         self.xs_path = os.path.join(dir, "xs.txt")
-        self.ys_hmac_path = os.path.join(dir, "ys_hmac.txt")
-        self.ys_ecdsa_path = os.path.join(dir, "ys_ecdsa.txt")
+        self.ys_hmac_generate_path = os.path.join(dir, "ys_hmac_generate.txt")
+        self.ys_hmac_verify_path = os.path.join(dir, "ys_hmac_verify.txt")
+        self.ys_ecdsa_generate_path = os.path.join(dir, "ys_ecdsa_generate.txt")
+        self.ys_ecdsa_verify_path = os.path.join(dir, "ys_ecdsa_verify.txt")
 
     def save(
         self,
@@ -179,8 +237,10 @@ class BenchmarkResultsPaths:
         logger.info(f"begin saving data into directory {self.root_dir}")
 
         numpy.savetxt(self.xs_path, benchmark_results.xs)
-        numpy.savetxt(self.ys_hmac_path, benchmark_results.ys_hmac)
-        numpy.savetxt(self.ys_ecdsa_path, benchmark_results.ys_ecdsa)
+        numpy.savetxt(self.ys_hmac_generate_path, benchmark_results.ys_hmac_generate)
+        numpy.savetxt(self.ys_ecdsa_generate_path, benchmark_results.ys_ecdsa_generate)
+        numpy.savetxt(self.ys_hmac_verify_path, benchmark_results.ys_hmac_verify)
+        numpy.savetxt(self.ys_ecdsa_verify_path, benchmark_results.ys_ecdsa_verify)
 
         logger.info(f"end saving data into directory {self.root_dir}")
 
@@ -189,8 +249,10 @@ class BenchmarkResultsPaths:
 
         if not (
             os.path.isfile(self.xs_path)
-            and os.path.isfile(self.ys_hmac_path)
-            and os.path.isfile(self.ys_ecdsa_path)
+            and os.path.isfile(self.ys_hmac_generate_path)
+            and os.path.isfile(self.ys_ecdsa_generate_path)
+            and os.path.isfile(self.ys_hmac_verify_path)
+            and os.path.isfile(self.ys_ecdsa_verify_path)
         ):
             logger.error(f"invalid data inside directory {self.root_dir}")
             return False
@@ -201,8 +263,10 @@ class BenchmarkResultsPaths:
         logger.info(f"begin loading data from directory {self.root_dir}")
         results = BenchmarkResults(
             xs=numpy.loadtxt(self.xs_path),
-            ys_hmac=numpy.loadtxt(self.ys_hmac_path),
-            ys_ecdsa=numpy.loadtxt(self.ys_ecdsa_path),
+            ys_hmac_generate=numpy.loadtxt(self.ys_hmac_generate_path),
+            ys_ecdsa_generate=numpy.loadtxt(self.ys_ecdsa_generate_path),
+            ys_ecdsa_verify=numpy.loadtxt(self.ys_ecdsa_verify_path),
+            ys_hmac_verify=numpy.loadtxt(self.ys_hmac_verify_path),
         )
         logger.info(f"end loading data from directory {self.root_dir}")
 
@@ -213,30 +277,50 @@ def run_benchmarks(n_iter) -> BenchmarkResults:
     xs = numpy.linspace(start=1, stop=100, num=100)
     xs = kilobytes_to_bytes(xs)
 
-    logger.info("begin benchmarking hmac-sha256")
-    ys_hmac = []
+    logger.info("begin benchmarking hmac-sha256 generation")
+    ys_hmac_generate = []
     for x in tqdm(xs):
-        ys_hmac.append(
-            run_hmac(x, n_iter=n_iter) // 1_000,
+        ys_hmac_generate.append(
+            run_hmac_generate(x, n_iter=n_iter) // 1_000,
         )
-    ys_hmac = numpy.array(ys_hmac)
-    logger.info("end benchmarking hmac-sha256")
+    ys_hmac_generate = numpy.array(ys_hmac_generate)
+    logger.info("end benchmarking hmac-sha256 generation")
 
-    logger.info("begin benchmarking ecdsa")
-    ys_ecdsa = []
+    logger.info("begin benchmarking hmac-sha256 verification")
+    ys_hmac_verify = []
     for x in tqdm(xs):
-        ys_ecdsa.append(
-            run_ecdsa(x, n_iter=n_iter) // 1_000,
+        ys_hmac_verify.append(
+            run_hmac_verify(x, n_iter=n_iter) // 1_000,
         )
-    ys_ecdsa = numpy.array(ys_ecdsa)
-    logger.info("end benchmarking ecdsa")
+    ys_hmac_verify = numpy.array(ys_hmac_verify)
+    logger.info("end benchmarking hmac-sha256 verification")
+
+    logger.info("begin benchmarking ecdsa generation")
+    ys_ecdsa_generate = []
+    for x in tqdm(xs):
+        ys_ecdsa_generate.append(
+            run_ecdsa_generate(x, n_iter=n_iter) // 1_000,
+        )
+    ys_ecdsa_generate = numpy.array(ys_ecdsa_generate)
+    logger.info("end benchmarking ecdsa generation")
+
+    logger.info("begin benchmarking ecdsa verification")
+    ys_ecdsa_verify = []
+    for x in tqdm(xs):
+        ys_ecdsa_verify.append(
+            run_ecdsa_generate(x, n_iter=n_iter) // 1_000,
+        )
+    ys_ecdsa_verify = numpy.array(ys_ecdsa_verify)
+    logger.info("end benchmarking ecdsa verification")
 
     xs = bytes_to_kilobytes(xs)
 
     return BenchmarkResults(
         xs=xs,
-        ys_hmac=ys_hmac,
-        ys_ecdsa=ys_ecdsa,
+        ys_hmac_generate=ys_hmac_generate,
+        ys_hmac_verify=ys_hmac_verify,
+        ys_ecdsa_generate=ys_ecdsa_generate,
+        ys_ecdsa_verify=ys_ecdsa_verify,
     )
 
 
@@ -266,20 +350,30 @@ def main() -> int:
         benchmark_results = benchmark_paths.load()
 
     logger.info("begin generating image")
-    plt.style.use(["science"])
+    plt.style.use(["science", "nature"])
     _, ax = plt.subplots()
 
     ax.set_xlabel(r"Input size, KB")
-    ax.set_ylabel(r"Generation time, $\mu$s")
+    ax.set_ylabel(r"Execution time, $\mu$s")
     ax.plot(
         benchmark_results.xs,
-        benchmark_results.ys_hmac,
-        label=r"$\textsf{HMAC-SHA256}$",
+        benchmark_results.ys_hmac_generate,
+        label=r"$\textsf{HMAC}$ generate",
     )
     ax.plot(
         benchmark_results.xs,
-        benchmark_results.ys_ecdsa,
-        label=r"$\textsf{ECDSA-SHA256}$",
+        benchmark_results.ys_hmac_verify,
+        label=r"$\textsf{HMAC}$ verify",
+    )
+    ax.plot(
+        benchmark_results.xs,
+        benchmark_results.ys_ecdsa_generate,
+        label=r"$\textsf{ECDSA}$ generate",
+    )
+    ax.plot(
+        benchmark_results.xs,
+        benchmark_results.ys_ecdsa_verify,
+        label=r"$\textsf{ECDSA}$ verify",
     )
 
     plt.legend()
