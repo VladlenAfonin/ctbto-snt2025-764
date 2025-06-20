@@ -6,7 +6,8 @@ dependencies = [
     "matplotlib",
     "numpy",
     "tqdm",
-    "SciencePlots"
+    "SciencePlots",
+    "black"
 ]
 
 [project.scripts]

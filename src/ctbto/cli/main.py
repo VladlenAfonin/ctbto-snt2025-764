@@ -1,5 +1,8 @@
+import argparse
+from dataclasses import dataclass
 import logging
 import logging.config
+import os
 import sys
 from time import time_ns
 from types import ModuleType
@@ -88,17 +91,133 @@ def bytes_to_megabytes(xs: numpy.ndarray) -> numpy.ndarray:
     return xs / 1024 / 1024
 
 
-def main() -> int:
-    xs = numpy.linspace(start=0.1, stop=10.0, num=30)
-    xs = megabytes_to_bytes(xs)
-    print(xs)
-    n_iter = 10
+def bytes_to_kilobytes(xs: numpy.ndarray) -> numpy.ndarray:
+    return xs / 1024
+
+
+def kilobytes_to_bytes(xs: numpy.ndarray) -> numpy.ndarray:
+    return (xs * 1024).astype(numpy.int64)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="supporting benchmark program for the CTBTO SnT 2025 conference e-poster #764",
+    )
+
+    n_iter_default = 100_000
+    parser.add_argument(
+        "-n",
+        help=f"number of iterations to perform for one measurement. default: {n_iter_default}",
+        dest="n_iter",
+        action="store",
+        metavar="NUMBER",
+        default=n_iter_default,
+        type=int,
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        help=f"output file name with extension. by default the image is"
+        + "displayed after generation in a separate window",
+        dest="output_file",
+        action="store",
+        metavar="FILE",
+        default=None,
+        type=str,
+    )
+
+    parser.add_argument(
+        "-s",
+        "--save",
+        help=f"save generated data into a directory",
+        dest="save_dir",
+        action="store",
+        metavar="DIR",
+        default=None,
+        type=str,
+    )
+
+    parser.add_argument(
+        "-l",
+        "--load",
+        help=f"load generated data from a directory",
+        dest="load_dir",
+        action="store",
+        metavar="DIR",
+        default=None,
+        type=str,
+    )
+
+    return parser.parse_args()
+
+
+@dataclass(slots=True)
+class BenchmarkResults:
+    xs: numpy.ndarray
+    ys_hmac: numpy.ndarray
+    ys_ecdsa: numpy.ndarray
+
+
+@dataclass(slots=True, init=False)
+class BenchmarkResultsPaths:
+    root_dir: str
+    xs_path: str
+    ys_hmac_path: str
+    ys_ecdsa_path: str
+
+    def __init__(self, dir) -> None:
+        self.root_dir = dir
+        self.xs_path = os.path.join(dir, "xs.txt")
+        self.ys_hmac_path = os.path.join(dir, "ys_hmac.txt")
+        self.ys_ecdsa_path = os.path.join(dir, "ys_ecdsa.txt")
+
+    def save(
+        self,
+        benchmark_results: BenchmarkResults,
+    ) -> None:
+        logger.info(f"begin saving data into directory {self.root_dir}")
+
+        numpy.savetxt(self.xs_path, benchmark_results.xs)
+        numpy.savetxt(self.ys_hmac_path, benchmark_results.ys_hmac)
+        numpy.savetxt(self.ys_ecdsa_path, benchmark_results.ys_ecdsa)
+
+        logger.info(f"end saving data into directory {self.root_dir}")
+
+    def verify(self) -> bool:
+        logger.info("verifying directory structure")
+
+        if not (
+            os.path.isfile(self.xs_path)
+            and os.path.isfile(self.ys_hmac_path)
+            and os.path.isfile(self.ys_ecdsa_path)
+        ):
+            logger.error(f"invalid data inside directory {self.root_dir}")
+            return False
+
+        return True
+
+    def load(self) -> BenchmarkResults:
+        logger.info(f"begin loading data from directory {self.root_dir}")
+        results = BenchmarkResults(
+            xs=numpy.loadtxt(self.xs_path),
+            ys_hmac=numpy.loadtxt(self.ys_hmac_path),
+            ys_ecdsa=numpy.loadtxt(self.ys_ecdsa_path),
+        )
+        logger.info(f"end loading data from directory {self.root_dir}")
+
+        return results
+
+
+def run_benchmarks(n_iter) -> BenchmarkResults:
+    xs = numpy.linspace(start=1, stop=100, num=100)
+    xs = kilobytes_to_bytes(xs)
 
     logger.info("begin benchmarking hmac-sha256")
     ys_hmac = []
     for x in tqdm(xs):
         ys_hmac.append(
-            run_hmac(x, n_iter=n_iter) // 1_000_000,
+            run_hmac(x, n_iter=n_iter) // 1_000,
         )
     ys_hmac = numpy.array(ys_hmac)
     logger.info("end benchmarking hmac-sha256")
@@ -107,23 +226,73 @@ def main() -> int:
     ys_ecdsa = []
     for x in tqdm(xs):
         ys_ecdsa.append(
-            run_ecdsa(x, n_iter=n_iter) // 1_000_000,
+            run_ecdsa(x, n_iter=n_iter) // 1_000,
         )
     ys_ecdsa = numpy.array(ys_ecdsa)
     logger.info("end benchmarking ecdsa")
 
-    xs = bytes_to_megabytes(xs)
+    xs = bytes_to_kilobytes(xs)
 
+    return BenchmarkResults(
+        xs=xs,
+        ys_hmac=ys_hmac,
+        ys_ecdsa=ys_ecdsa,
+    )
+
+
+def main() -> int:
+    args = parse_args()
+
+    if args.load_dir is None:
+        benchmark_results = run_benchmarks(args.n_iter)
+
+        if args.save_dir is not None:
+            if not os.path.isdir(args.save_dir):
+                os.mkdir(args.save_dir)
+
+            benchmark_paths = BenchmarkResultsPaths(args.save_dir)
+            benchmark_paths.save(benchmark_results)
+    else:
+        if not os.path.isdir(args.load_dir):
+            logger.error(f"specified load directory does not exist: {args.load_dir}")
+            return 1
+
+        benchmark_paths = BenchmarkResultsPaths(args.load_dir)
+
+        if not benchmark_paths.verify():
+            logger.error(f"invalid data inside directory {args.load_dir}")
+            return 1
+
+        benchmark_results = benchmark_paths.load()
+
+    logger.info("begin generating image")
     plt.style.use(["science"])
     _, ax = plt.subplots()
 
-    ax.set_xlabel("Input size, MB")
-    ax.set_ylabel("Generation time, ms")
-    ax.plot(xs, ys_hmac, label=r"$\textsf{HMAC-SHA256}$")
-    ax.plot(xs, ys_ecdsa, label=r"$\textsf{ECDSA-SHA256}$")
+    ax.set_xlabel(r"Input size, KB")
+    ax.set_ylabel(r"Generation time, $\mu$s")
+    ax.plot(
+        benchmark_results.xs,
+        benchmark_results.ys_hmac,
+        label=r"$\textsf{HMAC-SHA256}$",
+    )
+    ax.plot(
+        benchmark_results.xs,
+        benchmark_results.ys_ecdsa,
+        label=r"$\textsf{ECDSA-SHA256}$",
+    )
 
     plt.legend()
-    plt.show()
+    logger.info("end generating image")
+
+    if args.output_file is None:
+        logger.info(f"begin displaying the image")
+        plt.show()
+        logger.info(f"end displaying the image")
+    else:
+        logger.info(f"begin saving the image to file {args.output_file}")
+        plt.savefig(args.output_file, dpi=300)
+        logger.info(f"end saving the image to file {args.output_file}")
 
     return 0
 
