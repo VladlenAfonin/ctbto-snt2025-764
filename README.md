@@ -24,6 +24,7 @@ This repository is not in any way affiliated with the CTBTO.
 ## Benchmark Description
 
 We consider ECDSA and HMAC both instantiated with the SHA256 hash function.
+We use the pycryptodome ECDSA and HMAC implementations.
 
 ## Sample Results
 
