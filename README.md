@@ -113,7 +113,9 @@ options:
   -h, --help            show this help message and exit
   -n NUMBER             number of iterations to perform for one measurement. default: 1000
   -o FILE, --output FILE
-                        output file name with extension. by default the image isdisplayed after generation in a separate window
+                        output file name with extension. by default the image is
+                        displayed after generation in a separate window
+
   -s DIR, --save DIR    save generated data into a directory
   -l DIR, --load DIR    load generated data from a directory
 ```

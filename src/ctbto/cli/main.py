@@ -167,7 +167,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        help=f"output file name with extension. by default the image is"
+        help=f"output file name with extension. by default the image is "
         + "displayed after generation in a separate window",
         dest="output_file",
         action="store",
