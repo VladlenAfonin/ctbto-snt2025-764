@@ -153,7 +153,7 @@ def parse_args() -> argparse.Namespace:
         description="supporting benchmark program for the CTBTO SnT 2025 conference e-poster #764",
     )
 
-    n_iter_default = 100_000
+    n_iter_default = 1000
     parser.add_argument(
         "-n",
         help=f"number of iterations to perform for one measurement. default: {n_iter_default}",
